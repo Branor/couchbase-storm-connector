@@ -1,4 +1,4 @@
-package main.java;
+package com.couchbase.storm;
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -17,18 +17,6 @@ package main.java;
  * limitations under the License.
  */
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.LinkedBlockingQueue;
-
-import com.couchbase.client.core.ClusterFacade;
-import com.couchbase.client.core.message.dcp.*;
-import com.couchbase.client.deps.io.netty.util.CharsetUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-
 import backtype.storm.Config;
 import backtype.storm.spout.SpoutOutputCollector;
 import backtype.storm.task.TopologyContext;
@@ -37,6 +25,18 @@ import backtype.storm.topology.base.BaseRichSpout;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
 import backtype.storm.utils.Utils;
+import com.couchbase.client.core.message.dcp.DCPRequest;
+import com.couchbase.client.core.message.dcp.MutationMessage;
+import com.couchbase.client.core.message.dcp.RemoveMessage;
+import com.couchbase.client.core.message.dcp.SnapshotMarkerMessage;
+import com.couchbase.client.deps.io.netty.util.CharsetUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.LinkedBlockingQueue;
 
 @SuppressWarnings("serial")
 public class CouchbaseDcpSpout extends BaseRichSpout {
@@ -47,8 +47,6 @@ public class CouchbaseDcpSpout extends BaseRichSpout {
 
     SpoutOutputCollector _collector;
     LinkedBlockingQueue<DCPRequest> queue = null;
-    String nodes;
-
 
     public CouchbaseDcpSpout(final String couchbaseNodes, final String couchbaseBucket) {
         this(splitNodes(couchbaseNodes), couchbaseBucket);
@@ -66,13 +64,11 @@ public class CouchbaseDcpSpout extends BaseRichSpout {
     @Override
     public void open(Map conf, TopologyContext context,
                      SpoutOutputCollector collector) {
-        queue = new LinkedBlockingQueue<DCPRequest>(1000);
+        queue = new LinkedBlockingQueue<>(1000);
         _collector = collector;
         this.env = DefaultDcpConsumerEnvironment.create();
 
-        DcpConsumer dcp = new DcpConsumer(couchbaseNodes, couchbaseBucket, env, message -> {
-            queue.offer(message);
-        });
+        DcpConsumer dcp = new DcpConsumer(couchbaseNodes, couchbaseBucket, env, queue::offer);
         dcp.run();
     }
 

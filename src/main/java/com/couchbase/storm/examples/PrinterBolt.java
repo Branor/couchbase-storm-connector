@@ -1,11 +1,10 @@
-package main.java;
+package com.couchbase.storm.examples;
 
 import backtype.storm.task.TopologyContext;
 import backtype.storm.topology.BasicOutputCollector;
 import backtype.storm.topology.OutputFieldsDeclarer;
 import backtype.storm.topology.base.BaseBasicBolt;
 import backtype.storm.tuple.Tuple;
-import com.sun.tools.doclets.formats.html.SourceToHTMLConverter;
 
 import java.util.Map;
 

@@ -1,4 +1,4 @@
-package main.java;
+package com.couchbase.storm;
 
 import com.couchbase.client.core.env.CoreEnvironment;
 

@@ -20,7 +20,7 @@
  * IN THE SOFTWARE.
  */
 
-package main.java;
+package com.couchbase.storm;
 
 import com.couchbase.client.core.ClusterFacade;
 import com.couchbase.client.core.CouchbaseCore;
@@ -29,18 +29,18 @@ import com.couchbase.client.core.message.cluster.GetClusterConfigRequest;
 import com.couchbase.client.core.message.cluster.GetClusterConfigResponse;
 import com.couchbase.client.core.message.cluster.OpenBucketRequest;
 import com.couchbase.client.core.message.cluster.SeedNodesRequest;
-import com.couchbase.client.core.message.dcp.*;
-import com.couchbase.client.deps.io.netty.util.CharsetUtil;
+import com.couchbase.client.core.message.dcp.DCPRequest;
+import com.couchbase.client.core.message.dcp.OpenConnectionRequest;
+import com.couchbase.client.core.message.dcp.StreamRequestRequest;
+import com.couchbase.client.core.message.dcp.StreamRequestResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import rx.Observable;
-import rx.functions.Func1;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 /**
  * @author Sergey Avseyev
@@ -77,9 +77,7 @@ public class DcpConsumer implements Runnable {
 
     @Override
     public String toString() {
-        return "CouchbaseProducer{" +
-                "couchbaseBucket=" + couchbaseBucket +
-                '}';
+        return "CouchbaseDcpConsumer{" + "couchbaseBucket=" + couchbaseBucket + '}';
     }
 
     @Override
@@ -98,7 +96,7 @@ public class DcpConsumer implements Runnable {
                 .toList()
                 .flatMap(couchbaseResponses -> partitionSize())
                 .flatMap(this::requestStreams)
-                .subscribe(request -> handler.accept(request));
+                .subscribe(handler::accept);
     }
 
     private static String joinNodes(final List<String> nodes) {
@@ -123,14 +121,6 @@ public class DcpConsumer implements Runnable {
         return core
             .<GetClusterConfigResponse>send(new GetClusterConfigRequest())
                 .map(response -> ((CouchbaseBucketConfig) response.config().bucketConfig(couchbaseBucket)).numberOfPartitions());
-//                        .map(new Func1<GetClusterConfigResponse, Integer>() {
-//                            @Override
-//                            public Integer call(GetClusterConfigResponse response) {
-//                                CouchbaseBucketConfig config = (CouchbaseBucketConfig) response
-//                                        .config().bucketConfig(couchbaseBucket);
-//                                return config.numberOfPartitions();
-//                            }
-//                        });
     }
 
     private Observable<DCPRequest> requestStreams(int numberOfPartitions) {
@@ -138,18 +128,6 @@ public class DcpConsumer implements Runnable {
                 Observable.range(0, numberOfPartitions)
                         .flatMap(partition -> core.<StreamRequestResponse>send(new StreamRequestRequest(partition.shortValue(), couchbaseBucket)))
                         .map(StreamRequestResponse::stream)
-//                        .flatMap(new Func1<Integer, Observable<StreamRequestResponse>>() {
-//                            @Override
-//                            public Observable<StreamRequestResponse> call(Integer partition) {
-//                                return core.send(new StreamRequestRequest(partition.shortValue(), couchbaseBucket));
-//                            }
-//                        })
-//                        .map(new Func1<StreamRequestResponse, Observable<DCPRequest>>() {
-//                            @Override
-//                            public Observable<DCPRequest> call(StreamRequestResponse response) {
-//                                return response.stream();
-//                            }
-//                        })
         );
     }
 }

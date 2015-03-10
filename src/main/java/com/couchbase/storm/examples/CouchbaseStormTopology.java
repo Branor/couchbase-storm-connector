@@ -1,14 +1,28 @@
-package main.java;
-
+package com.couchbase.storm.examples;
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 import backtype.storm.Config;
 import backtype.storm.LocalCluster;
 import backtype.storm.topology.TopologyBuilder;
-import com.couchbase.client.core.CouchbaseCore;
-import com.couchbase.client.core.message.CouchbaseResponse;
-import com.couchbase.client.core.message.cluster.OpenBucketRequest;
-import com.couchbase.client.core.message.cluster.SeedNodesRequest;
-import com.couchbase.client.core.message.dcp.*;
+import com.couchbase.client.core.message.dcp.MutationMessage;
+import com.couchbase.storm.CouchbaseDcpSpout;
+import com.couchbase.storm.DcpTypeFilterBolt;
 import org.apache.storm.hdfs.bolt.HdfsBolt;
 import org.apache.storm.hdfs.bolt.format.DefaultFileNameFormat;
 import org.apache.storm.hdfs.bolt.format.DelimitedRecordFormat;
@@ -18,17 +32,12 @@ import org.apache.storm.hdfs.bolt.rotation.FileRotationPolicy;
 import org.apache.storm.hdfs.bolt.rotation.FileSizeRotationPolicy;
 import org.apache.storm.hdfs.bolt.sync.CountSyncPolicy;
 import org.apache.storm.hdfs.bolt.sync.SyncPolicy;
-import rx.Observable;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+
 
 /**
- * Created by davido on 3/2/15.
+ * Created by David Ostrovsky on 3/2/15.
  */
 public class CouchbaseStormTopology {
     public static void main(String[] args) throws IOException {
@@ -50,7 +59,7 @@ public class CouchbaseStormTopology {
         FileRotationPolicy rotationPolicy = new FileSizeRotationPolicy(5.0f, FileSizeRotationPolicy.Units.MB);
 
         FileNameFormat fileNameFormat = new DefaultFileNameFormat()
-                .withPath("/foo/");
+                .withPath("/couchbase/");
 
         HdfsBolt hdfsBolt = new HdfsBolt()
                 .withFsUrl("hdfs://hdp:8020")
