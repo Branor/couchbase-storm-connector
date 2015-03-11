@@ -69,12 +69,15 @@ public class CouchbaseStormTopology {
                 .withSyncPolicy(syncPolicy);
 
         builder.setSpout("couchbase", new CouchbaseDcpSpout(nodes, bucket), 1);
-        builder.setBolt("filter", new DcpTypeFilterBolt(MutationMessage.class), 2).shuffleGrouping("couchbase");
+        builder.setBolt("filter", new DcpTypeFilterBolt(MutationMessage.class), 2).setMaxTaskParallelism(2).setNumTasks(2).shuffleGrouping("couchbase");
         builder.setBolt("print", new PrinterBolt(), 1).shuffleGrouping("filter");
         builder.setBolt("hdfs", hdfsBolt, 1).shuffleGrouping("filter");
 
 
         Config conf = new Config();
+        conf.setMaxTaskParallelism(4);
+        //conf.setDebug(true);
+        conf.setNumWorkers(2);
         LocalCluster cluster = new LocalCluster();
 
         cluster.submitTopology("test", conf, builder.createTopology());

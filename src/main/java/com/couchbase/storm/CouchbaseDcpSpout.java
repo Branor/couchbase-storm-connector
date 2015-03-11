@@ -68,7 +68,11 @@ public class CouchbaseDcpSpout extends BaseRichSpout {
         _collector = collector;
         this.env = DefaultDcpConsumerEnvironment.create();
 
-        DcpConsumer dcp = new DcpConsumer(couchbaseNodes, couchbaseBucket, env, queue::offer);
+        int spoutInstances = context.getComponentTasks(context.getThisComponentId()).size();
+        int currentIndex = context.getThisTaskIndex();
+        LOGGER.debug("Couchbase DCP Spout instance: " + currentIndex + " out of total: " + spoutInstances);
+
+        DcpConsumer dcp = new DcpConsumer(couchbaseNodes, couchbaseBucket, env, queue::offer, spoutInstances, currentIndex);
         dcp.run();
     }
 

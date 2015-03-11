@@ -53,6 +53,8 @@ public class DcpConsumer implements Runnable {
     private final String couchbaseBucket;
     private final List<String> couchbaseNodes;
     private final Consumer<DCPRequest> handler;
+    private final int logicalPartitions;
+    private final int currentPartition;
 
     public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, Consumer<DCPRequest> handler) {
         this(couchbaseNodes, couchbaseBucket, DefaultDcpConsumerEnvironment.create(), handler);
@@ -62,15 +64,20 @@ public class DcpConsumer implements Runnable {
         this(splitNodes(couchbaseNodes), couchbaseBucket, DefaultDcpConsumerEnvironment.create(), handler);
     }
 
-    public DcpConsumer(final String couchbaseNodes, final String couchbaseBucket, DcpConsumerEnvironment env, Consumer<DCPRequest> handler) {
-        this(splitNodes(couchbaseNodes), couchbaseBucket, env, handler);
+    public DcpConsumer(final String couchbaseNodes, final String couchbaseBucket, DcpConsumerEnvironment env, Consumer<DCPRequest> handler, int logicalPartitions, int currentPartition) {
+        this(splitNodes(couchbaseNodes), couchbaseBucket, env, handler, logicalPartitions, currentPartition);
     }
 
     public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, DcpConsumerEnvironment env, Consumer<DCPRequest> handler) {
+        this(couchbaseNodes, couchbaseBucket, env, handler, 1, 0);
+    }
+    public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, DcpConsumerEnvironment env, Consumer<DCPRequest> handler, int logicalPartitions, int currentPartition) {
         this.env = env;
         this.couchbaseBucket = couchbaseBucket;
         this.couchbaseNodes = couchbaseNodes;
         this.handler = handler;
+        this.logicalPartitions = logicalPartitions;
+        this.currentPartition = currentPartition;
 
         core = new CouchbaseCore(this.env);
     }
@@ -123,9 +130,13 @@ public class DcpConsumer implements Runnable {
                 .map(response -> ((CouchbaseBucketConfig) response.config().bucketConfig(couchbaseBucket)).numberOfPartitions());
     }
 
-    private Observable<DCPRequest> requestStreams(int numberOfPartitions) {
+    private Observable<DCPRequest> requestStreams(int vBuckets) {
+        int partitionSize = vBuckets / logicalPartitions;
+        int start = currentPartition * partitionSize;
+        LOGGER.debug("Opening vbucket streams, start: " + start + " partition size: " + partitionSize);
+
         return Observable.merge(
-                Observable.range(0, numberOfPartitions)
+                Observable.range(start, partitionSize)
                         .flatMap(partition -> core.<StreamRequestResponse>send(new StreamRequestRequest(partition.shortValue(), couchbaseBucket)))
                         .map(StreamRequestResponse::stream)
         );
