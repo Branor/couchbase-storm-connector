@@ -22,14 +22,14 @@ public class PrinterBolt extends BaseBasicBolt {
 
     @Override
     public void execute(Tuple tuple, BasicOutputCollector collector) {
-        //System.out.println(tuple);
+        System.out.println(tuple);
 
         count++;
 
 
-        if(count % 100 == 0)
+        if(count % 1 == 0)
             System.out.print('.');
-        if(count % 10000 == 0)
+        if(count % 100 == 0)
             System.out.println(count);
     }
 

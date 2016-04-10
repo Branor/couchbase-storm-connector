@@ -44,13 +44,10 @@ public class CouchbaseStormTopology {
         String nodes = args[0];
         String bucket = args[1];
 
-        TopologyBuilder builder = new TopologyBuilder();
-
         System.setProperty("com.couchbase.dcpEnabled", "true");
 
         // use "|" instead of "," for field delimiter
-        RecordFormat format = new DelimitedRecordFormat()
-                .withFieldDelimiter("|");
+        RecordFormat format = new DelimitedRecordFormat().withFieldDelimiter("|");
 
         // sync the filesystem after every 1k tuples
         SyncPolicy syncPolicy = new CountSyncPolicy(1000);
@@ -68,21 +65,22 @@ public class CouchbaseStormTopology {
                 .withRotationPolicy(rotationPolicy)
                 .withSyncPolicy(syncPolicy);
 
+        TopologyBuilder builder = new TopologyBuilder();
         builder.setSpout("couchbase", new CouchbaseDcpSpout(nodes, bucket), 1);
-        builder.setBolt("filter", new DcpTypeFilterBolt(MutationMessage.class), 2).setMaxTaskParallelism(2).setNumTasks(2).shuffleGrouping("couchbase");
+        builder.setBolt("filter", new DcpTypeFilterBolt(MutationMessage.class), 2).shuffleGrouping("couchbase");
         builder.setBolt("print", new PrinterBolt(), 1).shuffleGrouping("filter");
         builder.setBolt("hdfs", hdfsBolt, 1).shuffleGrouping("filter");
 
+        builder.setBolt("sentiment", new SentimentBolt(), 1).shuffleGrouping("filter");
+        builder.setBolt("print2", new PrinterBolt(), 1).shuffleGrouping("sentiment");
+        builder.setBolt("couchbaseWriter", new CouchbaseWriterBolt(nodes, bucket), 1).shuffleGrouping("sentiment");
+
 
         Config conf = new Config();
-        conf.setMaxTaskParallelism(4);
-        //conf.setDebug(true);
-        conf.setNumWorkers(2);
         LocalCluster cluster = new LocalCluster();
 
         cluster.submitTopology("test", conf, builder.createTopology());
 
-        //Utils.sleep(100000);
         System.in.read();
         //cluster.shutdown();
     }

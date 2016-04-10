@@ -11,8 +11,8 @@
 
 
     <build>
-        <sourceDirectory>src</sourceDirectory>
-        <testSourceDirectory>test</testSourceDirectory>
+        <sourceDirectory>src/main/java</sourceDirectory>
+        <testSourceDirectory>src/test</testSourceDirectory>
         <resources>
             <resource>
                 <directory>${basedir}/multilang</directory>
@@ -20,6 +20,15 @@
         </resources>
 
         <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
+                </configuration>
+            </plugin>
+
             <!--
               Bind the maven-assembly-plugin to the package phase
               this will create a jar file without the storm dependencies
@@ -84,7 +93,7 @@
                     <includeProjectDependencies>true</includeProjectDependencies>
                     <includePluginDependencies>false</includePluginDependencies>
                     <classpathScope>compile</classpathScope>
-                    <mainClass>${storm.topology}</mainClass>
+                    <mainClass>com.couchbase.storm.examples.CouchbaseStormTopology</mainClass>
                 </configuration>
             </plugin>
         </plugins>
@@ -108,6 +117,19 @@
     <dependencies>
 
         <dependency>
+            <groupId>edu.stanford.nlp</groupId>
+            <artifactId>stanford-corenlp</artifactId>
+            <version>3.6.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>edu.stanford.nlp</groupId>
+            <artifactId>stanford-corenlp</artifactId>
+            <version>3.6.0</version>
+            <classifier>models</classifier>
+        </dependency>
+
+        <dependency>
             <groupId>org.apache.storm</groupId>
             <artifactId>storm-core</artifactId>
             <version>LATEST</version>
@@ -124,8 +146,14 @@
         <!--<dependency>-->
             <!--<groupId>com.couchbase.client</groupId>-->
             <!--<artifactId>core-io</artifactId>-->
-            <!--<version>1.1.0-dp</version>-->
+            <!--<version>1.1.0</version>-->
         <!--</dependency>-->
+
+        <dependency>
+            <groupId>com.couchbase.client</groupId>
+            <artifactId>java-client</artifactId>
+            <version>2.1.6</version>
+        </dependency>
 
         <dependency>
             <groupId>com.github.ptgoetz</groupId>
