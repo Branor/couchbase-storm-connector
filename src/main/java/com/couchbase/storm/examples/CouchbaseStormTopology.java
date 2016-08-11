@@ -46,11 +46,11 @@ public class CouchbaseStormTopology {
 
         System.setProperty("com.couchbase.dcpEnabled", "true");
 
-        // use "|" instead of "," for field delimiter
-        RecordFormat format = new DelimitedRecordFormat().withFieldDelimiter("|");
+        // use "\001" instead of "," for field delimiter
+        RecordFormat format = new DelimitedRecordFormat().withFieldDelimiter("\001");
 
         // sync the filesystem after every 1k tuples
-        SyncPolicy syncPolicy = new CountSyncPolicy(1000);
+        SyncPolicy syncPolicy = new CountSyncPolicy(10);
 
         // rotate files when they reach 5MB
         FileRotationPolicy rotationPolicy = new FileSizeRotationPolicy(5.0f, FileSizeRotationPolicy.Units.MB);
@@ -69,9 +69,11 @@ public class CouchbaseStormTopology {
         builder.setSpout("couchbase", new CouchbaseDcpSpout(nodes, bucket), 1);
         builder.setBolt("filter", new DcpTypeFilterBolt(MutationMessage.class), 2).shuffleGrouping("couchbase");
         builder.setBolt("print", new PrinterBolt(), 1).shuffleGrouping("filter");
-        builder.setBolt("hdfs", hdfsBolt, 1).shuffleGrouping("filter");
 
-        builder.setBolt("sentiment", new SentimentBolt(), 1).shuffleGrouping("filter");
+//        builder.setBolt("fieldExtractor", new FieldExtractorBolt(), 1).shuffleGrouping("filter");
+//        builder.setBolt("hdfs", hdfsBolt, 1).shuffleGrouping("fieldExtractor");
+
+        builder.setBolt("sentiment", new SentimentBolt(), 2).shuffleGrouping("filter");
         builder.setBolt("print2", new PrinterBolt(), 1).shuffleGrouping("sentiment");
         builder.setBolt("couchbaseWriter", new CouchbaseWriterBolt(nodes, bucket), 1).shuffleGrouping("sentiment");
 
