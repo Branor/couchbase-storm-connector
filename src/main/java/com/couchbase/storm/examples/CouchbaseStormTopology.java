@@ -17,12 +17,11 @@ package com.couchbase.storm.examples;
  * limitations under the License.
  */
 
-import org.apache.storm.Config;
-import org.apache.storm.LocalCluster;
-import org.apache.storm.topology.TopologyBuilder;
 import com.couchbase.client.core.message.dcp.MutationMessage;
 import com.couchbase.storm.CouchbaseDcpSpout;
 import com.couchbase.storm.DcpTypeFilterBolt;
+import org.apache.storm.Config;
+import org.apache.storm.LocalCluster;
 import org.apache.storm.hdfs.bolt.HdfsBolt;
 import org.apache.storm.hdfs.bolt.format.DefaultFileNameFormat;
 import org.apache.storm.hdfs.bolt.format.DelimitedRecordFormat;
@@ -32,6 +31,7 @@ import org.apache.storm.hdfs.bolt.rotation.FileRotationPolicy;
 import org.apache.storm.hdfs.bolt.rotation.FileSizeRotationPolicy;
 import org.apache.storm.hdfs.bolt.sync.CountSyncPolicy;
 import org.apache.storm.hdfs.bolt.sync.SyncPolicy;
+import org.apache.storm.topology.TopologyBuilder;
 
 import java.io.IOException;
 
@@ -73,9 +73,10 @@ public class CouchbaseStormTopology {
 //        builder.setBolt("fieldExtractor", new FieldExtractorBolt(), 1).shuffleGrouping("filter");
 //        builder.setBolt("hdfs", hdfsBolt, 1).shuffleGrouping("fieldExtractor");
 
-        builder.setBolt("sentiment", new SentimentBolt(), 2).shuffleGrouping("filter");
-        builder.setBolt("print2", new PrinterBolt(), 1).shuffleGrouping("sentiment");
-        builder.setBolt("couchbaseWriter", new CouchbaseWriterBolt(nodes, bucket), 1).shuffleGrouping("sentiment");
+        builder.setBolt("sentiment", new SentimentBolt(), 8).shuffleGrouping("filter");
+        builder.setBolt("metadata", new MetadataBolt(), 1).shuffleGrouping("sentiment");
+        builder.setBolt("print2", new PrinterBolt(), 1).shuffleGrouping("metadata");
+        builder.setBolt("couchbaseWriter", new CouchbaseWriterBolt(nodes, bucket), 1).shuffleGrouping("metadata");
 
 
         Config conf = new Config();

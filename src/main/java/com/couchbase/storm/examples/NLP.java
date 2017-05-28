@@ -19,8 +19,10 @@ public class NLP {
         pipeline = new StanfordCoreNLP(props);
     }
 
-    public static int findSentiment(String tweet) {
+    public static int findSentiment(String input) {
 
+        String tweet = input.replaceAll("[^\\u0009\\u000a\\u000d\\u0020-\\uD7FF\\uE000-\\uFFFD]", "");
+        tweet = tweet.replaceAll("[\\uD83D\\uFFFD\\uFE0F\\u203C\\u3010\\u3011\\u300A\\u300D\\u200D\\u300E\\u300F\\u166D\\u200C\\u202A\\u202C\\u2049\\u20E3\\u300B\\u300C\\u3030\\u065F\\u0099\\u0F3A\\u0F3B\\uF610\\uFFFC]", "");
         int mainSentiment = 0;
         if (tweet != null && tweet.length() > 0) {
             int longest = 0;
