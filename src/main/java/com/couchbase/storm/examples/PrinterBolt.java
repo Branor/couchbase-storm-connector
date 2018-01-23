@@ -27,7 +27,7 @@ public class PrinterBolt extends BaseBasicBolt {
         count++;
 
 
-        if(count % 1 == 0)
+        if(count % 10 == 0)
             System.out.print('.');
         if(count % 100 == 0)
             System.out.println(count);

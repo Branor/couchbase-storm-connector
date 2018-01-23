@@ -25,11 +25,6 @@ import org.apache.storm.topology.base.BaseRichSpout;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.tuple.Values;
 import org.apache.storm.utils.Utils;
-import com.couchbase.client.core.message.dcp.DCPRequest;
-import com.couchbase.client.core.message.dcp.MutationMessage;
-import com.couchbase.client.core.message.dcp.RemoveMessage;
-import com.couchbase.client.core.message.dcp.SnapshotMarkerMessage;
-import com.couchbase.client.deps.io.netty.util.CharsetUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,19 +36,20 @@ import java.util.concurrent.LinkedBlockingQueue;
 @SuppressWarnings("serial")
 public class CouchbaseDcpSpout extends BaseRichSpout {
     private static final Logger LOGGER = LoggerFactory.getLogger(CouchbaseDcpSpout.class);
-    private transient DcpConsumerEnvironment env;
     private final String couchbaseBucket;
+    private final String couchbasePassword;
     private final List<String> couchbaseNodes;
 
     SpoutOutputCollector _collector;
-    LinkedBlockingQueue<DCPRequest> queue = null;
+    LinkedBlockingQueue<DcpMessage> queue = null;
 
-    public CouchbaseDcpSpout(final String couchbaseNodes, final String couchbaseBucket) {
-        this(splitNodes(couchbaseNodes), couchbaseBucket);
+    public CouchbaseDcpSpout(final String couchbaseNodes, final String couchbaseBucket, final String couchbasePassword) {
+        this(splitNodes(couchbaseNodes), couchbaseBucket, couchbasePassword);
     }
 
-    public CouchbaseDcpSpout(final List<String> couchbaseNodes, final String couchbaseBucket) {
+    public CouchbaseDcpSpout(final List<String> couchbaseNodes, final String couchbaseBucket, final String couchbasePassword) {
         this.couchbaseBucket = couchbaseBucket;
+        this.couchbasePassword = couchbasePassword;
         this.couchbaseNodes = couchbaseNodes;
     }
 
@@ -66,13 +62,12 @@ public class CouchbaseDcpSpout extends BaseRichSpout {
                      SpoutOutputCollector collector) {
         queue = new LinkedBlockingQueue<>(1000);
         _collector = collector;
-        this.env = DefaultDcpConsumerEnvironment.create();
 
         int spoutInstances = context.getComponentTasks(context.getThisComponentId()).size();
         int currentIndex = context.getThisTaskIndex();
         LOGGER.debug("Couchbase DCP Spout instance: " + currentIndex + " out of total: " + spoutInstances);
 
-        DcpConsumer dcp = new DcpConsumer(couchbaseNodes, couchbaseBucket, env, queue::offer, spoutInstances, currentIndex);
+        DcpConsumer dcp = new DcpConsumer(couchbaseNodes, couchbaseBucket, couchbasePassword, queue::offer, spoutInstances, currentIndex);
         dcp.run();
     }
 
@@ -82,25 +77,27 @@ public class CouchbaseDcpSpout extends BaseRichSpout {
         String key = "";
         String content = "";
 
-        DCPRequest request = queue.poll();
-        if (request == null) {
+        DcpMessage message = queue.poll();
+        if (message == null) {
             Utils.sleep(50);
         } else {
-            if (request instanceof MutationMessage) {
-                MutationMessage message = (MutationMessage) request;
-                key = message.key();
-                content = message.content().toString(CharsetUtil.UTF_8);
-            // handle document change/update
-            } else if (request instanceof RemoveMessage) {
-                key = ((RemoveMessage) request).key();
-                // handle document deletion
-            } else if(request instanceof  SnapshotMarkerMessage) {
-                SnapshotMarkerMessage message = (SnapshotMarkerMessage) request;
-                key = "snapshot";
-                content = "vBucket: " + message.partition() + ", start sequence: " + message.startSequenceNumber() + ", end sequence: " + message.endSequenceNumber();
+            switch(message.getType()) {
+                case MUTATION:
+                    key = message.getKey();
+                    content = message.getContent();
+                    break;
+                case DELETION:
+                    key = message.getKey();
+                    break;
+                case EXPIRATION:
+                    key = message.getKey();
+                    break;
+                case SNAPSHOT:
+                    key = "snapshot";
+                    content = "vBucket: " + message.getPartition() + ", start sequence: " + message.getStartSeqno() + ", end sequence: " + message.getEndSeqno();
+                    break;
             }
-
-            _collector.emit(new Values(request.getClass(), key, content));
+            _collector.emit(new Values(message.getType(), key, content));
         }
     }
 

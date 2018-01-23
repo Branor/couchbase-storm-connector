@@ -35,16 +35,16 @@ import java.util.Map;
 
 public class DcpTypeFilterBolt extends BaseBasicBolt {
 
-    private final List<Class> accepteTypes;
+    private final List<DcpMessageType> accepteTypes;
     public DcpTypeFilterBolt() {
         this.accepteTypes = new ArrayList<>();
     }
 
-    public DcpTypeFilterBolt(Class acceptType) {
+    public DcpTypeFilterBolt(DcpMessageType acceptType) {
         this(Arrays.asList(acceptType));
     }
 
-    public DcpTypeFilterBolt(List<Class> acceptTypes) {
+    public DcpTypeFilterBolt(List<DcpMessageType> acceptTypes) {
         this.accepteTypes = acceptTypes;
     }
 
@@ -55,7 +55,7 @@ public class DcpTypeFilterBolt extends BaseBasicBolt {
 
     @Override
     public void execute(Tuple tuple, BasicOutputCollector collector) {
-        Class type = (Class)tuple.getValueByField("type");
+        DcpMessageType type = (DcpMessageType)tuple.getValueByField("type");
         if(accepteTypes.contains(type))
             collector.emit(tuple.getValues());
     }

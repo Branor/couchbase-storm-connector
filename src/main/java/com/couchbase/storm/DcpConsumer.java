@@ -22,24 +22,16 @@
 
 package com.couchbase.storm;
 
-import com.couchbase.client.core.ClusterFacade;
-import com.couchbase.client.core.CouchbaseCore;
-import com.couchbase.client.core.config.CouchbaseBucketConfig;
-import com.couchbase.client.core.message.cluster.GetClusterConfigRequest;
-import com.couchbase.client.core.message.cluster.GetClusterConfigResponse;
-import com.couchbase.client.core.message.cluster.OpenBucketRequest;
-import com.couchbase.client.core.message.cluster.SeedNodesRequest;
-import com.couchbase.client.core.message.dcp.DCPRequest;
-import com.couchbase.client.core.message.dcp.OpenConnectionRequest;
-import com.couchbase.client.core.message.dcp.StreamRequestRequest;
-import com.couchbase.client.core.message.dcp.StreamRequestResponse;
+import com.couchbase.client.dcp.*;
+import com.couchbase.client.dcp.message.DcpDeletionMessage;
+import com.couchbase.client.dcp.message.DcpExpirationMessage;
+import com.couchbase.client.dcp.message.DcpMutationMessage;
+import com.couchbase.client.dcp.message.DcpSnapshotMarkerRequest;
+import com.couchbase.client.deps.io.netty.util.CharsetUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import rx.Observable;
 
-import java.util.Arrays;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -48,38 +40,67 @@ import java.util.function.Consumer;
  */
 public class DcpConsumer implements Runnable {
     private static final Logger LOGGER = LoggerFactory.getLogger(DcpConsumer.class);
-    private final DcpConsumerEnvironment env;
-    private final ClusterFacade core;
+    private final Client client;
     private final String couchbaseBucket;
+    private final String couchbasePassword;
     private final List<String> couchbaseNodes;
-    private final Consumer<DCPRequest> handler;
+    private final Consumer<DcpMessage> handler;
     private final int logicalPartitions;
     private final int currentPartition;
 
-    public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, Consumer<DCPRequest> handler) {
-        this(couchbaseNodes, couchbaseBucket, DefaultDcpConsumerEnvironment.create(), handler);
+    public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, final String couchbasePassword, Consumer<DcpMessage> handler) {
+        this(couchbaseNodes, couchbaseBucket, couchbasePassword, handler, 1, 0);
     }
-
-    public DcpConsumer(final String couchbaseNodes, final String couchbaseBucket, Consumer<DCPRequest> handler) {
-        this(splitNodes(couchbaseNodes), couchbaseBucket, DefaultDcpConsumerEnvironment.create(), handler);
-    }
-
-    public DcpConsumer(final String couchbaseNodes, final String couchbaseBucket, DcpConsumerEnvironment env, Consumer<DCPRequest> handler, int logicalPartitions, int currentPartition) {
-        this(splitNodes(couchbaseNodes), couchbaseBucket, env, handler, logicalPartitions, currentPartition);
-    }
-
-    public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, DcpConsumerEnvironment env, Consumer<DCPRequest> handler) {
-        this(couchbaseNodes, couchbaseBucket, env, handler, 1, 0);
-    }
-    public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, DcpConsumerEnvironment env, Consumer<DCPRequest> handler, int logicalPartitions, int currentPartition) {
-        this.env = env;
+    public DcpConsumer(final List<String> couchbaseNodes, final String couchbaseBucket, final String couchbasePassword, Consumer<DcpMessage> handler, int logicalPartitions, int currentPartition) {
         this.couchbaseBucket = couchbaseBucket;
+        this.couchbasePassword = couchbasePassword;
         this.couchbaseNodes = couchbaseNodes;
         this.handler = handler;
         this.logicalPartitions = logicalPartitions;
         this.currentPartition = currentPartition;
 
-        core = new CouchbaseCore(this.env);
+        client = Client.configure()
+                .hostnames(couchbaseNodes)
+                .bucket(couchbaseBucket)
+                .password(couchbasePassword)
+                .build();
+
+        // Don't do anything with control events in this example
+        client.controlEventHandler((flowController, event) -> {
+            if (DcpSnapshotMarkerRequest.is(event)) {
+                handler.accept(new DcpMessage(
+                        DcpMessageType.SNAPSHOT,
+                        DcpSnapshotMarkerRequest.partition(event),
+                        DcpSnapshotMarkerRequest.startSeqno(event),
+                        DcpSnapshotMarkerRequest.endSeqno(event)));
+                //System.out.println("Snapshot: " + DcpSnapshotMarkerRequest.toString(event));
+            }
+            event.release();
+        });
+
+        // Print out Mutations and Deletions
+        client.dataEventHandler((flowController, event) -> {
+            if (DcpMutationMessage.is(event)) {
+                handler.accept(new DcpMessage(
+                        DcpMessageType.MUTATION,
+                        DcpMutationMessage.key(event).toString(CharsetUtil.UTF_8),
+                        DcpMutationMessage.content(event).toString(CharsetUtil.UTF_8)));
+                //System.out.println("Mutation: " + DcpMutationMessage.toString(event));
+            } else if (DcpDeletionMessage.is(event)) {
+                handler.accept(new DcpMessage(
+                        DcpMessageType.DELETION,
+                        DcpDeletionMessage.key(event).toString(CharsetUtil.UTF_8)));
+                //System.out.println("Deletion: " + DcpDeletionMessage.toString(event));
+
+            }
+            else if (DcpExpirationMessage.is(event)) {
+                handler.accept(new DcpMessage(
+                        DcpMessageType.DELETION,
+                        DcpExpirationMessage.key(event).toString(CharsetUtil.UTF_8)));
+                //System.out.println("Expiration: " + DcpExpirationMessage.toString(event));
+            }
+            event.release();
+        });
     }
 
     @Override
@@ -89,56 +110,13 @@ public class DcpConsumer implements Runnable {
 
     @Override
     public void run() {
-        core.send(new SeedNodesRequest(couchbaseNodes))
-                .timeout(2, TimeUnit.SECONDS)
-                .toBlocking()
-                .single();
-        core.send(new OpenBucketRequest(couchbaseBucket, ""))
-                .timeout(20, TimeUnit.SECONDS)
-                .toBlocking()
-                .single();
+        // Connect the sockets
+        client.connect().await();
 
-        String streamName = couchbaseBucket + "->" + "storm";
-        core.send(new OpenConnectionRequest(streamName, couchbaseBucket))
-                .toList()
-                .flatMap(couchbaseResponses -> partitionSize())
-                .flatMap(this::requestStreams)
-                .subscribe(handler::accept);
-    }
+        // Initialize the state (start now, never stop)
+        client.initializeState(StreamFrom.BEGINNING, StreamTo.INFINITY).await();
 
-    private static String joinNodes(final List<String> nodes) {
-        StringBuilder sb = new StringBuilder();
-        int size = nodes.size();
-
-        for (int i = 0; i < size; ++i) {
-            sb.append(nodes.get(i));
-            if (i < size - 1) {
-                sb.append(",");
-            }
-        }
-
-        return sb.toString();
-    }
-
-    private static List<String> splitNodes(final String nodes) {
-        return Arrays.asList(nodes.split(","));
-    }
-
-    private Observable<Integer> partitionSize() {
-        return core
-            .<GetClusterConfigResponse>send(new GetClusterConfigRequest())
-                .map(response -> ((CouchbaseBucketConfig) response.config().bucketConfig(couchbaseBucket)).numberOfPartitions());
-    }
-
-    private Observable<DCPRequest> requestStreams(int vBuckets) {
-        int partitionSize = vBuckets / logicalPartitions;
-        int start = currentPartition * partitionSize;
-        LOGGER.debug("Opening vbucket streams, start: " + start + " partition size: " + partitionSize);
-
-        return Observable.merge(
-                Observable.range(start, partitionSize)
-                        .flatMap(partition -> core.<StreamRequestResponse>send(new StreamRequestRequest(partition.shortValue(), couchbaseBucket)))
-                        .map(StreamRequestResponse::stream)
-        );
+        // Start streaming on all partitions
+        client.startStreaming().await();
     }
 }

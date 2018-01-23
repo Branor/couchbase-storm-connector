@@ -15,23 +15,24 @@ import java.util.Map;
 
 public class CouchbaseWriterBolt extends BaseBasicBolt {
 
-    private String nodes;
-    private String bucketName;
+    private final String bucketPassword;
+    private final String nodes;
+    private final String bucketName;
     private Bucket bucket;
     private Cluster cluster;
 
-    public CouchbaseWriterBolt(final String nodes, final String bucketName) {
+    public CouchbaseWriterBolt(final String nodes, final String bucketName, final String bucketPassword) {
         this.nodes = nodes;
         this.bucketName = bucketName;
+        this.bucketPassword = bucketPassword;
     }
 
     @Override
     public void prepare(Map stormConf, TopologyContext context) {
         System.out.println("CouchbaseWriterBolt preparing");
 
-        DefaultCouchbaseEnvironment env = DefaultCouchbaseEnvironment.builder().maxRequestLifetime(75000).build();
-        cluster = CouchbaseCluster.create(env, nodes);
-        bucket = cluster.openBucket(bucketName);
+        cluster = CouchbaseCluster.create(nodes);
+        bucket = cluster.openBucket(bucketName, bucketPassword);
     }
 
     @Override

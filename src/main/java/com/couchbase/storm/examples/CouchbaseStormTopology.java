@@ -17,8 +17,8 @@ package com.couchbase.storm.examples;
  * limitations under the License.
  */
 
-import com.couchbase.client.core.message.dcp.MutationMessage;
 import com.couchbase.storm.CouchbaseDcpSpout;
+import com.couchbase.storm.DcpMessageType;
 import com.couchbase.storm.DcpTypeFilterBolt;
 import org.apache.storm.Config;
 import org.apache.storm.LocalCluster;
@@ -43,8 +43,7 @@ public class CouchbaseStormTopology {
     public static void main(String[] args) throws IOException {
         String nodes = args[0];
         String bucket = args[1];
-
-        System.setProperty("com.couchbase.dcpEnabled", "true");
+        String password = args[2];
 
         // use "\001" instead of "," for field delimiter
         RecordFormat format = new DelimitedRecordFormat().withFieldDelimiter("\001");
@@ -66,9 +65,9 @@ public class CouchbaseStormTopology {
                 .withSyncPolicy(syncPolicy);
 
         TopologyBuilder builder = new TopologyBuilder();
-        builder.setSpout("couchbase", new CouchbaseDcpSpout(nodes, bucket), 1);
-        builder.setBolt("filter", new DcpTypeFilterBolt(MutationMessage.class), 2).shuffleGrouping("couchbase");
-        builder.setBolt("print", new PrinterBolt(), 1).shuffleGrouping("filter");
+        builder.setSpout("couchbase", new CouchbaseDcpSpout(nodes, bucket, password), 1);
+        builder.setBolt("filter", new DcpTypeFilterBolt(DcpMessageType.MUTATION), 2).shuffleGrouping("couchbase");
+//        builder.setBolt("print", new PrinterBolt(), 1).shuffleGrouping("filter");
 
 //        builder.setBolt("fieldExtractor", new FieldExtractorBolt(), 1).shuffleGrouping("filter");
 //        builder.setBolt("hdfs", hdfsBolt, 1).shuffleGrouping("fieldExtractor");
@@ -76,7 +75,7 @@ public class CouchbaseStormTopology {
         builder.setBolt("sentiment", new SentimentBolt(), 8).shuffleGrouping("filter");
         builder.setBolt("metadata", new MetadataBolt(), 1).shuffleGrouping("sentiment");
         builder.setBolt("print2", new PrinterBolt(), 1).shuffleGrouping("metadata");
-        builder.setBolt("couchbaseWriter", new CouchbaseWriterBolt(nodes, bucket), 1).shuffleGrouping("metadata");
+        builder.setBolt("couchbaseWriter", new CouchbaseWriterBolt(nodes, bucket, password), 1).shuffleGrouping("metadata");
 
 
         Config conf = new Config();
